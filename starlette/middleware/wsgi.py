@@ -148,10 +148,16 @@ class WSGIResponder:
         environ: dict[str, Any],
         start_response: Callable[..., Any],
     ) -> None:
-        for chunk in self.app(environ, start_response):
-            anyio.from_thread.run(
-                self.stream_send.send,
-                {"type": "http.response.body", "body": chunk, "more_body": True},
-            )
+        response = self.app(environ, start_response)
+        try:
+            for chunk in response:
+                anyio.from_thread.run(
+                    self.stream_send.send,
+                    {"type": "http.response.body", "body": chunk, "more_body": True},
+                )
 
-        anyio.from_thread.run(self.stream_send.send, {"type": "http.response.body", "body": b""})
+            anyio.from_thread.run(self.stream_send.send, {"type": "http.response.body", "body": b""})
+        finally:
+            close = getattr(response, "close", None)
+            if close is not None:
+                close()

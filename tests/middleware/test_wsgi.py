@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import pytest
@@ -78,6 +78,30 @@ def test_wsgi_post(test_client_factory: TestClientFactory) -> None:
     response = client.post("/", json={"example": 123})
     assert response.status_code == 200
     assert response.text == '{"example":123}'
+
+
+def test_wsgi_closes_response_iterable(test_client_factory: TestClientFactory) -> None:
+    class ClosingIterable:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def __iter__(self) -> Iterator[bytes]:
+            yield b"ok"
+
+        def close(self) -> None:
+            self.closed = True
+
+    response_body = ClosingIterable()
+
+    def app(environ: Environment, start_response: StartResponse) -> WSGIResponse:
+        start_response("200 OK", [("Content-Length", "2")])
+        return response_body
+
+    client = test_client_factory(WSGIMiddleware(app))
+    response = client.get("/")
+
+    assert response.content == b"ok"
+    assert response_body.closed
 
 
 def test_wsgi_exception(test_client_factory: TestClientFactory) -> None:
