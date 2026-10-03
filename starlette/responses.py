@@ -449,8 +449,10 @@ class FileResponse(Response):
                 more_body = True
                 while more_body:
                     chunk = await file.read(min(self.chunk_size, end - start))
+                    if not chunk:
+                        raise RuntimeError(f"File at path {self.path} is shorter than expected.")
                     start += len(chunk)
-                    more_body = len(chunk) == self.chunk_size and start < end
+                    more_body = start < end
                     await send({"type": "http.response.body", "body": chunk, "more_body": more_body})
 
     async def _handle_multiple_ranges(
