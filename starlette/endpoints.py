@@ -102,14 +102,13 @@ class WebSocketEndpoint:
             return message["bytes"]
 
         elif self.encoding == "json":
-            if message.get("text") is not None:
-                text = message["text"]
-            else:
-                text = message["bytes"].decode("utf-8")
-
             try:
+                if message.get("text") is not None:
+                    text = message["text"]
+                else:
+                    text = message["bytes"].decode("utf-8")
                 return json.loads(text)
-            except json.decoder.JSONDecodeError:
+            except (UnicodeDecodeError, json.decoder.JSONDecodeError):
                 await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
                 raise RuntimeError("Malformed JSON data received.")
 

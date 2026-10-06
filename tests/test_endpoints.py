@@ -269,6 +269,29 @@ async def test_websocket_endpoint_decode_bytes_rejects_message_without_bytes() -
     assert sent == [{"type": "websocket.close", "code": status.WS_1003_UNSUPPORTED_DATA, "reason": ""}]
 
 
+@pytest.mark.anyio
+async def test_websocket_endpoint_decode_json_rejects_invalid_utf8() -> None:
+    class Echo(WebSocketEndpoint):
+        encoding = "json"
+
+    sent: list[Message] = []
+
+    async def receive() -> Message:
+        raise AssertionError("receive should not be called")  # pragma: no cover
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    ep = Echo({"type": "websocket", "path": "/", "headers": [], "query_string": b""}, receive=receive, send=send)
+    websocket = WebSocket(ep.scope, receive=ep.receive, send=send)
+    message: Message = {"type": "websocket.receive", "bytes": b"\xff"}
+
+    with pytest.raises(RuntimeError, match="Malformed JSON data received"):
+        await ep.decode(websocket, message)
+
+    assert sent == [{"type": "websocket.close", "code": status.WS_1003_UNSUPPORTED_DATA, "reason": ""}]
+
+
 def test_websocket_endpoint_on_disconnect(
     test_client_factory: TestClientFactory,
 ) -> None:
