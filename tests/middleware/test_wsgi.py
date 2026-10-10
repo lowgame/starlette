@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import pytest
@@ -70,6 +70,28 @@ def test_wsgi_get(test_client_factory: TestClientFactory) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert response.text == "Hello World!\n"
+
+
+def test_wsgi_closes_response_iterable(test_client_factory: TestClientFactory) -> None:
+    closed = False
+
+    class ClosingIterable:
+        def __iter__(self) -> Iterator[bytes]:
+            yield b"response"
+
+        def close(self) -> None:
+            nonlocal closed
+            closed = True
+
+    def app(environ: Environment, start_response: StartResponse) -> WSGIResponse:
+        start_response("200 OK", [("Content-Type", "text/plain")])
+        return ClosingIterable()
+
+    response = test_client_factory(WSGIMiddleware(app)).get("/")
+
+    assert response.status_code == 200
+    assert response.content == b"response"
+    assert closed
 
 
 def test_wsgi_post(test_client_factory: TestClientFactory) -> None:
